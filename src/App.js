@@ -3,8 +3,9 @@ import TextareaAutosize from "react-textarea-autosize";
 import execution from "./logic/execution";
 import { useState } from "react";
 let clock = 0;
-const addLatency = 4;
+const addLatency = 2;
 const mulLatency = 10;
+const divLatency = 40;
 const loadLatency = 2;
 const storeLatency = 2;
 const reservationAdd = new Array(3);
@@ -23,6 +24,7 @@ let storeAmount = 0;
 const registerFile = new Array(32).fill(0);
 let exitingInsts = 0;
 let programEnd = false;
+let finishedThisCycle = [];
 
 //for test
 registerFile.forEach((elem, idx) => (registerFile[idx] = idx));
@@ -33,6 +35,8 @@ let writeBuffer = null;
 //for test
 registerFile[2] = 3.5;
 registerFile[3] = 7.2;
+cache[2] = 2;
+cache[3] = 3;
 
 function getOrDefault(map, key) {
   return map.has(key) ? map.get(key) : [];
@@ -80,16 +84,19 @@ function runCycle(instruction) {
   } else programEnd = true;
 
   // Execute
-
-  console.log("exec");
+  finishedThisCycle = [];
   for (let i = 0; i < reservationAdd.length; i++) {
     if (
       reservationAdd[i] &&
       reservationAdd[i].Qj === null &&
       reservationAdd[i].Qk === null &&
       reservationAdd[i].CyclesLeft !== 0
-    )
+    ) {
       reservationAdd[i].CyclesLeft--;
+      if (reservationAdd[i].CyclesLeft === 0) {
+        finishedThisCycle.push(reservationAdd[i].A);
+      }
+    }
   }
 
   for (let i = 0; i < reservationMul.length; i++) {
@@ -98,13 +105,21 @@ function runCycle(instruction) {
       reservationMul[i].Qj === null &&
       reservationMul[i].Qk === null &&
       reservationMul[i].CyclesLeft !== 0
-    )
+    ) {
       reservationMul[i].CyclesLeft--;
+      if (reservationMul[i].CyclesLeft === 0) {
+        finishedThisCycle.push(reservationMul[i].A);
+      }
+    }
   }
 
   for (let i = 0; i < reservationLoad.length; i++) {
-    if (reservationLoad[i] && reservationLoad[i].CyclesLeft !== 0)
+    if (reservationLoad[i] && reservationLoad[i].CyclesLeft !== 0) {
       reservationLoad[i].CyclesLeft--;
+      if (reservationLoad[i].CyclesLeft === 0) {
+        finishedThisCycle.push(reservationLoad[i].A);
+      }
+    }
   }
 
   for (let i = 0; i < reservationStore.length; i++) {
@@ -112,14 +127,16 @@ function runCycle(instruction) {
       reservationStore[i] &&
       reservationStore[i].Qj === null &&
       reservationStore[i].CyclesLeft !== 0
-    )
+    ) {
       reservationStore[i].CyclesLeft--;
+      if (reservationStore[i].CyclesLeft === 0) {
+        finishedThisCycle.push(reservationStore[i].A);
+      }
+    }
   }
 
   // Issue
   if (!programEnd) {
-    console.log("issue with type=", instructionType, "args=", instructionArgs);
-
     switch (instructionType) {
       case "ADD":
       case "SUB":
@@ -156,14 +173,13 @@ function runCycle(instruction) {
         break;
       case "DIV":
       case "MUL":
-        console.log("Jesse ");
         if (reservationMul.length !== mulAmount) {
           mulAmount++;
           const index = findFirstZero(reservationMulAssignments);
           reservationMulAssignments[index] = 1;
           reservationMul[index] = {
             A: "M" + (index + 1),
-            CyclesLeft: mulLatency,
+            CyclesLeft: instructionType === "DIV" ? divLatency : mulLatency,
             Type: instructionType,
             Vj: getV(instructionArgs[1]),
             Vk: getV(instructionArgs[2]),
@@ -230,16 +246,16 @@ function runCycle(instruction) {
         break;
     }
   }
-  if (!canNotIssue) enteringInsts--;
 
   clock++;
 
   // Write Back
-
-  console.log("running cycle");
   if (exitingInsts > 0) {
     for (let i = 0; i < reservationAdd.length; i++) {
-      if (reservationAdd[i]?.CyclesLeft === 0) {
+      if (
+        reservationAdd[i]?.CyclesLeft === 0 &&
+        !finishedThisCycle.includes(reservationAdd[i]?.A)
+      ) {
         console.log("writeBuffer=", writeBuffer);
         writeBuffer =
           writeBuffer === null
@@ -260,7 +276,10 @@ function runCycle(instruction) {
     }
 
     for (let i = 0; i < reservationMul.length; i++) {
-      if (reservationMul[i]?.CyclesLeft === 0) {
+      if (
+        reservationMul[i]?.CyclesLeft === 0 &&
+        !finishedThisCycle.includes(reservationMul[i]?.A)
+      ) {
         writeBuffer =
           writeBuffer === null
             ? {
@@ -279,7 +298,10 @@ function runCycle(instruction) {
       }
     }
     for (let i = 0; i < reservationLoad.length; i++) {
-      if (reservationLoad[i]?.CyclesLeft === 0) {
+      if (
+        reservationLoad[i]?.CyclesLeft === 0 &&
+        !finishedThisCycle.includes(reservationLoad[i]?.A)
+      ) {
         writeBuffer =
           writeBuffer === null
             ? {
@@ -297,8 +319,12 @@ function runCycle(instruction) {
             : writeBuffer;
       }
     }
+    // I dont like this i dont like it at all
     for (let i = 0; i < reservationStore.length; i++) {
-      if (reservationStore[i]?.CyclesLeft === 0) {
+      if (
+        reservationStore[i]?.CyclesLeft === 0 &&
+        !finishedThisCycle.includes(reservationStore[i]?.A)
+      ) {
         execution[reservationStore[i].Type](
           reservationStore[i].Vj,
           reservationStore[i].Vk,
@@ -311,9 +337,8 @@ function runCycle(instruction) {
       }
     }
     if (writeBuffer) {
-      console.log(writesTo, "Balavizo");
       const dependencies = getOrDefault(writesTo, writeBuffer.A);
-      console.log("depdep=", dependencies);
+
       const index = dependencies[0];
       const result = execution[writeBuffer.Type](
         writeBuffer.Vj,
@@ -322,22 +347,17 @@ function runCycle(instruction) {
         writeBuffer.V
       );
 
-      console.log("writeBuffer", writeBuffer, registerFile, "registerFile");
-      console.log(index, "index");
       if (index !== null && registerFile[index] === writeBuffer.A) {
-        console.log("Ambizo");
         registerFile[index] = result;
       }
 
-      console.log("dep1=", dependencies);
       dependencies.splice(0, 1);
-      console.log("dep2=", dependencies);
       dependencies.forEach((reservationStationName) => {
         let reservationStation;
         if (reservationStationName.slice(0, 1) === "A") {
           reservationStation =
             reservationAdd[+reservationStationName.slice(1) - 1];
-          console.log("res station", reservationStation);
+
           if (reservationStation.Qj === writeBuffer.A) {
             reservationStation.Qj = null;
             reservationStation.Vj = result;
@@ -430,7 +450,7 @@ function App() {
               JSON.stringify(reservationMul) +
               "\n" +
               "reservationLoad: " +
-              JSON.stringify(reservationLoad) +
+              JSON.stringify(reservationLoad) + // Should we add Qi to the register file?
               "\n" +
               "reservationStore: " +
               JSON.stringify(reservationStore) +
