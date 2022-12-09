@@ -3,6 +3,8 @@ import TextareaAutosize from "react-textarea-autosize";
 import execution from "./logic/execution";
 import { useState } from "react";
 
+let decrementPc = false;
+
 //current clock cycle
 let clock = 1;
 
@@ -130,7 +132,9 @@ function getDependentInsts(dependencies) {
 
 /*The main fuction that simulates tomasulo algorithm cycle by cycle
 Takes as input the instruction that should be issued this cycle */
-function runCycle(instruction) {
+function runCycle(instruction, pc, setPc) {
+  console.log(instruction);
+
   // Issue
 
   //nullify the tag of the Issued instruction at the beginning of each cycle
@@ -144,7 +148,7 @@ function runCycle(instruction) {
 
     // decode the different fields of the current instruction
 
-    instructionSplit = instruction.split(" ");
+    instructionSplit = instruction?.split(" ");
     instructionType = instructionSplit[0];
     instructionArgs = [
       instructionSplit[1],
@@ -428,7 +432,7 @@ function runCycle(instruction) {
         };
     }
   }
-  // I dont like this i dont like it at all ?????
+
   for (let i = 0; i < reservationStore.length; i++) {
     if (
       reservationStore[i]?.CyclesLeft === 0 &&
@@ -443,6 +447,11 @@ function runCycle(instruction) {
       reservationStoreAssignments[i] = 0;
       existingInsts--;
       storeAmount--;
+
+      if (instruction?.split(" ")[0] === "SD") {
+        stalled = false;
+        decrementPc = true;
+      }
     }
   }
 
@@ -515,16 +524,34 @@ function runCycle(instruction) {
         reservationAdd[+writeBuffer.Tag.slice(1) - 1] = null;
         //decrement the number of busy add reservation station
         addAmount--;
+        if (
+          instruction?.split(" ")[0] === "ADD" ||
+          instruction?.split(" ")[0] === "SUB"
+        ) {
+          stalled = false;
+          decrementPc = true;
+        }
         break;
       case "M":
         reservationMulAssignments[+writeBuffer.Tag.slice(1) - 1] = 0;
         reservationMul[+writeBuffer.Tag.slice(1) - 1] = null;
         mulAmount--;
+        if (
+          instruction?.split(" ")[0] === "MUL" ||
+          instruction?.split(" ")[0] === "DIV"
+        ) {
+          stalled = false;
+          decrementPc = true;
+        }
         break;
       case "L":
         reservationLoadAssignments[+writeBuffer.Tag.slice(1) - 1] = 0;
         reservationLoad[+writeBuffer.Tag.slice(1) - 1] = null;
         loadAmount--;
+        if (instruction?.split(" ")[0] === "LD") {
+          stalled = false;
+          decrementPc = true;
+        }
         break;
     }
     //remove the list of dependencies of the instruction that has published
@@ -539,7 +566,7 @@ function runCycle(instruction) {
 }
 
 function App() {
-  const [pc, setPC] = useState(0);
+  const [pc, setPc] = useState(0);
   const [instructions, setInstructions] = useState();
   const [result, setResult] = useState("");
 
@@ -562,14 +589,18 @@ function App() {
           if (!currentInstruction) programEnd = true;
           // Run for another cycle
           runCycle(currentInstruction);
+
           // increment the pc if the pipline is not stalled and the program has not ended yet
-          if (!stalled && !programEnd) {
-            setPC(pc + 1);
+
+          if (!stalled && !programEnd && !decrementPc) {
+            setPc(pc + 1);
+          }
+          if (decrementPc) {
+            decrementPc = false;
           }
           setResult(
             "clock: " +
-              clock +
-              +"\n" +
+              (clock + "\n") +
               "reservationAdd: " +
               JSON.stringify(reservationAdd) +
               "\n" +
@@ -584,9 +615,6 @@ function App() {
               "\n" +
               "registerFile: " +
               JSON.stringify(registerFile) +
-              "\n" +
-              "writesTo: " +
-              JSON.stringify(writesTo) +
               "\n"
           );
           // increment the current clock cycle
