@@ -4,7 +4,7 @@ import execution from "./logic/execution";
 import { useState } from "react";
 
 //current clock cycle
-let clock = 0;
+let clock = 1;
 
 // Latency of different operations (Should be edited to take input from the user ??) Can the add and the sub have different latencies ??
 const addLatency = 2;
@@ -43,11 +43,11 @@ const cache = new Array(1024).fill(0);
 // Hash map that maps each reservation station with the register and the other reservation stations waiting for the result produced by it
 const writesTo = new Map();
 
-//Variable contains the reservation station that will publich to the CDB this cycle
+//Variable contains the reservation station that will publish to the CDB this cycle
 let writeBuffer = null;
 
 /*Varibale to keep track of the tag of the reservation station of 
-the instructions that have been Issued this cycle to prevent it from executing in the same cycle*/
+the instruction that has been issued this cycle to prevent it from executing in the same cycle*/
 let issuedThisCycle = null;
 
 /*Array to keep track of the tags of reservation stations containing 
@@ -74,20 +74,18 @@ function getOrDefault(map, key) {
   return map.has(key) ? map.get(key) : [];
 }
 
-/*function that reads an operand of an instruction from the register file if it is valid and return null otherwise
+/*function that reads an operand of an instruction from the register file if it is valid and returns null otherwise
  Used to fill the V fields of the reservation stations*/
 function getV(arg) {
-  console.log(arg, registerFile[+arg.slice(1)]);
   return typeof registerFile[+arg.slice(1)] === "number"
     ? registerFile[+arg.slice(1)]
     : null;
 }
 
 /*function that gets the tag of the reservation station producing an operand of an instruction 
-if it is not valid in the register file  and returns null otherwise
+if it is not valid in the register file and returns null otherwise
  Used to fill the Q fields of the reservation stations*/
 function getQ(identifier, arg) {
-  console.log(writesTo, identifier, getOrDefault(writesTo, identifier));
   const value =
     typeof registerFile[+arg.slice(1)] === "string"
       ? registerFile[+arg.slice(1)]
@@ -102,14 +100,13 @@ function getQ(identifier, arg) {
   Used to find the first empty reservation station to issue a new instruction to it */
 function findFirstZero(arr) {
   for (let i = 0; i < arr.length; i++) {
-    console.log(arr[i]);
     if (!arr[i] || arr[i] === null) return i;
   }
   return -1;
 }
-/*function that count the number of Instructions that will be ready to execute after publishing the result of an insruction 
-Tags as input array of tags of the reservation stations waiting for the resu;t*/
-function getDependetInsts(dependencies) {
+/*function that counts the number of Instructions that will be ready to execute after publishing the result of an instruction 
+Takes as input an array of tags of the reservation stations waiting for the result*/
+function getDependentInsts(dependencies) {
   let insts = 0;
   dependencies.forEach((tag) => {
     let reservationStation;
@@ -132,7 +129,7 @@ function getDependetInsts(dependencies) {
 }
 
 /*The main fuction that simulates tomasulo algorithm cycle by cycle
-Take as input the instruction that should be issued this cycle */
+Takes as input the instruction that should be issued this cycle */
 function runCycle(instruction) {
   // Issue
 
@@ -146,8 +143,9 @@ function runCycle(instruction) {
     existingInsts++;
 
     // decode the different fields of the current instruction
-    instructionType = instructionSplit[0];
+
     instructionSplit = instruction.split(" ");
+    instructionType = instructionSplit[0];
     instructionArgs = [
       instructionSplit[1],
       instructionSplit[2],
@@ -159,18 +157,17 @@ function runCycle(instruction) {
       //ADD and SUB instructions should be placed in the Add reservation stations
       case "ADD":
       case "SUB":
-        console.log("amount before check", addAmount);
-        //first check if there is an empty reservation station
+        //first check if there is an empty reservation station of that type
         if (reservationAdd.length !== addAmount) {
           //increment the number of busy reservation stations of type add
           addAmount++;
           //get the first empty reservation station
           const index = findFirstZero(reservationAddAssignments);
-          console.log("index=", index);
+
           //mark it as a busy one
           reservationAddAssignments[index] = 1;
 
-          //set the different field of that reservation station
+          //set the different fields of that reservation station
           reservationAdd[index] = {
             Tag: "A" + (index + 1), // Add one to the index as it starts at 0 while the tags starts at 1
             CyclesLeft: addLatency, //The number of clock cycles left to finish execution
@@ -222,7 +219,7 @@ function runCycle(instruction) {
             Qj: getQ("M" + (index + 1), instructionArgs[1]),
             Qk: getQ("M" + (index + 1), instructionArgs[2]),
           };
-          issuedThisCycle = reservationAdd[index].Tag;
+          issuedThisCycle = reservationMul[index].Tag;
           registerFile[+instructionArgs[0].slice(1)] = "M" + (index + 1);
           writesTo.set("M" + (index + 1), [+instructionArgs[0].slice(1)]);
           if (reservationMul[index].Qj !== null)
@@ -249,7 +246,7 @@ function runCycle(instruction) {
             Type: instructionType,
             V: +instructionArgs[1], //the effective address
           };
-          issuedThisCycle = reservationAdd[index].Tag;
+          issuedThisCycle = reservationLoad[index].Tag;
           registerFile[+instructionArgs[0].slice(1)] = "L" + (index + 1);
           writesTo.set("L" + (index + 1), [+instructionArgs[0].slice(1)]);
         } else stalled = true;
@@ -267,7 +264,7 @@ function runCycle(instruction) {
             Vk: +instructionArgs[1], // effective address
             Qj: getQ("S" + (index + 1), instructionArgs[0]),
           };
-          issuedThisCycle = reservationAdd[index].Tag;
+          issuedThisCycle = reservationStore[index].Tag;
           if (reservationStore[index].Qj !== null) {
             writesTo.set(reservationStore[index].Qj, [
               ...getOrDefault(writesTo, reservationStore[index].Qj),
@@ -314,7 +311,7 @@ function runCycle(instruction) {
   for (let i = 0; i < reservationMul.length; i++) {
     if (
       reservationMul[i] &&
-      reservationAdd[i].Tag !== issuedThisCycle &&
+      reservationMul[i].Tag !== issuedThisCycle &&
       reservationMul[i].Qj === null &&
       reservationMul[i].Qk === null &&
       reservationMul[i].CyclesLeft !== 0
@@ -330,7 +327,7 @@ function runCycle(instruction) {
   for (let i = 0; i < reservationLoad.length; i++) {
     if (
       reservationLoad[i] &&
-      reservationAdd[i].Tag !== issuedThisCycle &&
+      reservationLoad[i].Tag !== issuedThisCycle &&
       reservationLoad[i].CyclesLeft !== 0
     ) {
       reservationLoad[i].CyclesLeft--;
@@ -344,7 +341,7 @@ function runCycle(instruction) {
   for (let i = 0; i < reservationStore.length; i++) {
     if (
       reservationStore[i] &&
-      reservationAdd[i].Tag !== issuedThisCycle &&
+      reservationStore[i].Tag !== issuedThisCycle &&
       reservationStore[i].Qj === null &&
       reservationStore[i].CyclesLeft !== 0
     ) {
@@ -363,11 +360,11 @@ function runCycle(instruction) {
       reservationAdd[i]?.CyclesLeft === 0 &&
       !finishedThisCycle.includes(reservationAdd[i]?.Tag)
     ) {
-      // get the tags of reservation stations waiting for the result  (slice(0)--> removes the first element which is the register waiting the result)
-      let dependencies = getOrDefault(writesTo, reservationAdd[i].Tag).slice(0);
+      // get the tags of reservation stations waiting for the result  (slice(1)--> removes the first element which is the register waiting the result)
+      let dependencies = getOrDefault(writesTo, reservationAdd[i].Tag).slice(1);
 
       //get the number of instructions that will be ready to execute after publishin the result
-      let numOfDependentInsts = getDependetInsts(dependencies);
+      let numOfDependentInsts = getDependentInsts(dependencies);
 
       // if the write buffer
       if (
@@ -390,9 +387,9 @@ function runCycle(instruction) {
       reservationMul[i]?.CyclesLeft === 0 &&
       !finishedThisCycle.includes(reservationMul[i]?.Tag)
     ) {
-      let dependencies = getOrDefault(writesTo, reservationMul[i].Tag).slice(0);
+      let dependencies = getOrDefault(writesTo, reservationMul[i].Tag).slice(1);
 
-      let numOfDependentInsts = getDependetInsts(dependencies);
+      let numOfDependentInsts = getDependentInsts(dependencies);
 
       if (
         !writeBuffer ||
@@ -413,10 +410,10 @@ function runCycle(instruction) {
       !finishedThisCycle.includes(reservationLoad[i]?.Tag)
     ) {
       let dependencies = getOrDefault(writesTo, reservationLoad[i].Tag).slice(
-        0
+        1
       );
 
-      let numOfDependentInsts = getDependetInsts(dependencies);
+      let numOfDependentInsts = getDependentInsts(dependencies);
 
       if (
         !writeBuffer ||
