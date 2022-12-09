@@ -1,21 +1,25 @@
-function add(a, b) {
+function ADD(a, b) {
   return a + b;
 }
 
-function sub(a, b) {
+function SUB(a, b) {
   return a - b;
 }
 
-function mul(a, b) {
+function MUL(a, b) {
   return a * b;
 }
 
-function div(a, b) {
+function DIV(a, b) {
   return a / b;
 }
 
-function store(a, b) {}
+function SD(a, b, cache) {
+  cache[b] = a;
+}
 
-function load(a, b) {}
+function LD(a, b, cache, c) {
+  return cache[c];
+}
 
-export default { add, store, load, sub, mul, div };
+export default { ADD, SD, LD, SUB, MUL, DIV };
