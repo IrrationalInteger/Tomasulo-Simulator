@@ -667,6 +667,7 @@ function App() {
   const [mL, setML] = useState(1);
   const [lL, setLL] = useState(1);
   const [sL, setSL] = useState(1);
+  const [dL, setDL] = useState(1);
 
   const [stop, setStop] = useState(false);
 
@@ -702,6 +703,14 @@ function App() {
             onChange={(e) => {
               setML(e.target.value);
               mulLatency = e.target.value;
+            }}
+          ></input>
+          <p>Enter Div latencies : </p>
+          <input
+            type="number"
+            onChange={(e) => {
+              setDL(e.target.value);
+              divLatency = e.target.value;
             }}
           ></input>
           <p>Enter Load latencies : </p>
@@ -792,7 +801,14 @@ function App() {
             setInstQueue(instructions.split(/\r?\n|\r|\n/g).reverse());
           }}
           disabled={
-            !aL || !mL || !lL || !sL || !instructions || instructions === ""
+            !aL ||
+            !mL ||
+            !lL ||
+            !sL ||
+            !dL ||
+            !suL ||
+            !instructions ||
+            instructions === ""
           }
         >
           Start
