@@ -678,149 +678,176 @@ function App() {
   const [running, setRunning] = useState(false);
   console.log("running", stop);
   return (
-    <div>
-      {!running && (
-        <>
-          <p style={{ marginTop: "0px" }}>Enter Add latencies : </p>
-          <input
-            type="number"
-            onChange={(e) => {
-              setAL(e.target.value);
-              addLatency = e.target.value;
-            }}
-          />
-          <p>Enter Sub latencies : </p>
-          <input
-            type="number"
-            onChange={(e) => {
-              setSuL(e.target.value);
-              subLatency = e.target.value;
-            }}
-          />
-          <p>Enter Mul latencies : </p>
-          <input
-            type="number"
-            onChange={(e) => {
-              setML(e.target.value);
-              mulLatency = e.target.value;
-            }}
-          ></input>
-          <p>Enter Div latencies : </p>
-          <input
-            type="number"
-            onChange={(e) => {
-              setDL(e.target.value);
-              divLatency = e.target.value;
-            }}
-          ></input>
-          <p>Enter Load latencies : </p>
-          <input
-            type="number"
-            onChange={(e) => {
-              setLL(e.target.value);
-              loadLatency = e.target.value;
-            }}
-          ></input>
-          <p>Enter Store latencies : </p>
-          <input
-            type="number"
-            onChange={(e) => {
-              setSL(e.target.value);
-              storeLatency = e.target.value;
-            }}
-          ></input>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          width: "100%",
+          height: "100%",
+        }}
+      >
+        {!running && (
+          <>
+            <p style={{ marginTop: "0px" }}>Enter Add latencies : </p>
+            <input
+              type="number"
+              onChange={(e) => {
+                setAL(e.target.value);
+                addLatency = e.target.value;
+              }}
+            />
+            <p>Enter Sub latencies : </p>
+            <input
+              type="number"
+              onChange={(e) => {
+                setSuL(e.target.value);
+                subLatency = e.target.value;
+              }}
+            />
+            <p>Enter Mul latencies : </p>
+            <input
+              type="number"
+              onChange={(e) => {
+                setML(e.target.value);
+                mulLatency = e.target.value;
+              }}
+            ></input>
+            <p>Enter Div latencies : </p>
+            <input
+              type="number"
+              onChange={(e) => {
+                setDL(e.target.value);
+                divLatency = e.target.value;
+              }}
+            ></input>
+            <p>Enter Load latencies : </p>
+            <input
+              type="number"
+              onChange={(e) => {
+                setLL(e.target.value);
+                loadLatency = e.target.value;
+              }}
+            ></input>
+            <p>Enter Store latencies : </p>
+            <input
+              type="number"
+              onChange={(e) => {
+                setSL(e.target.value);
+                storeLatency = e.target.value;
+              }}
+            ></input>
 
-          <p>Enter your instructions in assembly</p>
-        </>
-      )}
+            <p>Enter your instructions in assembly</p>
+          </>
+        )}
 
-      <div>
-        <TextareaAutosize
-          disabled={running}
-          onChange={(e) => setInstructions(e.target.value)}
-        ></TextareaAutosize>
-      </div>
-      {running ? (
-        <>
-          <p>{"Clock Cycle : " + clock}</p>
-          {stop ? (
-            <h1>Finished Execution. Click reset to run again.</h1>
+        <div>
+          <TextareaAutosize
+            disabled={running}
+            onChange={(e) => setInstructions(e.target.value)}
+          ></TextareaAutosize>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {running ? (
+            <>
+              <p>{"Clock Cycle : " + clock}</p>
+              <p>{"Program Counter : " + pc}</p>
+
+              {stalled && (
+                <h1 style={{ color: "red" }}>The pipeline is stalled!</h1>
+              )}
+              {stop ? (
+                <h1>Finished Execution. Click reset to run again.</h1>
+              ) : (
+                <button
+                  onClick={() => {
+                    // get the next instruction in the instructions queue
+                    let currentInstruction =
+                      instructions.split(/\r?\n|\r|\n/g)[pc];
+                    // if  no more instructions then mark the end of the program
+                    if (!currentInstruction) programEnd = true;
+                    // Run for another cycle
+                    runCycle(currentInstruction, handleStop);
+
+                    // increment the pc if the pipline is not stalled and the program has not ended yet
+                    if (!stalled && !programEnd && !decrementPc) {
+                      setPc(pc + 1);
+                    } else {
+                      flag = true;
+                    }
+                    console.log(flag);
+                    if (decrementPc) {
+                      decrementPc = false;
+                    }
+
+                    // set the old states
+                    setRegFileOld([...regFile]);
+                    setResAddOld([...resAdd]);
+                    setResMulOld([...resMul]);
+                    setResStoreOld([...resStore]);
+                    setResLoadOld([...resLoad]);
+                    setResCacheOld([...resCache]);
+
+                    // set the new states
+                    setRegFile([...registerFile]);
+                    setResAdd([...reservationAdd]);
+                    setResMul([...reservationMul]);
+                    setResStore([...reservationStore]);
+                    setResLoad([...reservationLoad]);
+                    setResCache([...cache]);
+                    if (!flag) {
+                      setInstQueueOld([...instQueue]);
+                      setInstQueue(
+                        [...instQueue].splice(0, instQueue.length - 1)
+                      );
+                    }
+                    flag = false;
+                    // increment the current clock cycle
+                    clock++;
+                  }}
+                >
+                  Next Cycle
+                </button>
+              )}
+            </>
           ) : (
             <button
               onClick={() => {
-                // get the next instruction in the instructions queue
-                let currentInstruction = instructions.split(/\r?\n|\r|\n/g)[pc];
-                // if  no more instructions then mark the end of the program
-                if (!currentInstruction) programEnd = true;
-                // Run for another cycle
-                runCycle(currentInstruction, handleStop);
-
-                // increment the pc if the pipline is not stalled and the program has not ended yet
-                if (!stalled && !programEnd && !decrementPc) {
-                  setPc(pc + 1);
-                } else {
-                  flag = true;
-                }
-                console.log(flag);
-                if (decrementPc) {
-                  decrementPc = false;
-                }
-
-                // set the old states
-                setRegFileOld([...regFile]);
-                setResAddOld([...resAdd]);
-                setResMulOld([...resMul]);
-                setResStoreOld([...resStore]);
-                setResLoadOld([...resLoad]);
-                setResCacheOld([...resCache]);
-
-                // set the new states
-                setRegFile([...registerFile]);
-                setResAdd([...reservationAdd]);
-                setResMul([...reservationMul]);
-                setResStore([...reservationStore]);
-                setResLoad([...reservationLoad]);
-                setResCache([...cache]);
-                if (!flag) {
-                  setInstQueueOld([...instQueue]);
-                  setInstQueue([...instQueue].splice(0, instQueue.length - 1));
-                }
-                flag = false;
-                // increment the current clock cycle
-                clock++;
+                setRunning(true);
+                setInstQueue(instructions.split(/\r?\n|\r|\n/g).reverse());
               }}
+              disabled={
+                !aL ||
+                !mL ||
+                !lL ||
+                !sL ||
+                !dL ||
+                !suL ||
+                !instructions ||
+                instructions === ""
+              }
             >
-              Next Cycle
+              Start
             </button>
           )}
-        </>
-      ) : (
-        <button
-          onClick={() => {
-            setRunning(true);
-            setInstQueue(instructions.split(/\r?\n|\r|\n/g).reverse());
-          }}
-          disabled={
-            !aL ||
-            !mL ||
-            !lL ||
-            !sL ||
-            !dL ||
-            !suL ||
-            !instructions ||
-            instructions === ""
-          }
-        >
-          Start
-        </button>
-      )}
-      <button
-        onClick={() => {
-          document.location.reload(true);
-        }}
-      >
-        Reset
-      </button>
+          <button
+            onClick={() => {
+              document.location.reload(true);
+            }}
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
       {running && (
         <>
           <div style={{ display: "flex", flexDirection: "column" }}>
