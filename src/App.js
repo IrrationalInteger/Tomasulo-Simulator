@@ -676,7 +676,7 @@ function App() {
   }
 
   const [running, setRunning] = useState(false);
-  console.log("running", stop);
+
   return (
     <div
       style={{
@@ -685,14 +685,18 @@ function App() {
       }}
     >
       <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          width: "100%",
-          height: "100%",
-        }}
+        style={
+          running
+            ? null
+            : {
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                alignItems: "center",
+                width: "100%",
+                height: "100%",
+              }
+        }
       >
         {!running && (
           <>
@@ -755,7 +759,9 @@ function App() {
             onChange={(e) => setInstructions(e.target.value)}
           ></TextareaAutosize>
         </div>
-        <div style={{ display: "flex", flexDirection: "column" }}>
+        <div
+          style={{ display: "flex", flexDirection: "column", width: "200px" }}
+        >
           {running ? (
             <>
               <p>{"Clock Cycle : " + clock}</p>
