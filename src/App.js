@@ -49,6 +49,7 @@ let clock = 1;
 
 // Latency of different operations (Should be edited to take input from the user ??) Can the add and the sub have different latencies ??
 let addLatency;
+let subLatency;
 let mulLatency;
 let divLatency;
 let loadLatency;
@@ -232,7 +233,7 @@ function runCycle(instruction, handleStop) {
           //set the different fields of that reservation station
           reservationAdd[index] = {
             Tag: "A" + (index + 1), // Add one to the index as it starts at 0 while the tags starts at 1
-            CyclesLeft: addLatency, //The number of clock cycles left to finish execution
+            CyclesLeft: instructionType === "ADD" ? addLatency : subLatency, //The number of clock cycles left to finish execution
             Type: instructionType,
             Vj: getV(instructionArgs[1]),
             Vk: getV(instructionArgs[2]),
@@ -662,6 +663,7 @@ function App() {
   const [instQueueOld, setInstQueueOld] = useState([]);
 
   const [aL, setAL] = useState(1);
+  const [suL, setSuL] = useState(1);
   const [mL, setML] = useState(1);
   const [lL, setLL] = useState(1);
   const [sL, setSL] = useState(1);
@@ -678,12 +680,20 @@ function App() {
     <div>
       {!running && (
         <>
-          <p style={{ marginTop: "0px" }}>Enter Add/Sub latencies : </p>
+          <p style={{ marginTop: "0px" }}>Enter Add latencies : </p>
           <input
             type="number"
             onChange={(e) => {
               setAL(e.target.value);
               addLatency = e.target.value;
+            }}
+          />
+          <p>Enter Sub latencies : </p>
+          <input
+            type="number"
+            onChange={(e) => {
+              setSuL(e.target.value);
+              subLatency = e.target.value;
             }}
           />
           <p>Enter Mul latencies : </p>
