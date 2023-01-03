@@ -42,30 +42,29 @@ const StyledTableRow = styled(TableRow)(({ theme }) => ({
 }));
 
 //---------------------------
-
 let decrementPc = false;
 
 //current clock cycle
 let clock = 1;
 
 // Latency of different operations (Should be edited to take input from the user ??) Can the add and the sub have different latencies ??
-const addLatency = 2;
-const mulLatency = 10;
-const divLatency = 40;
-const loadLatency = 2;
-const storeLatency = 2;
+let addLatency;
+let mulLatency;
+let divLatency;
+let loadLatency;
+let storeLatency;
 
 //Different Reservation Station and Buffers (Should be edited to take the size as input from the user??)
-const reservationAdd = new Array(5);
-const reservationMul = new Array(2);
-const reservationLoad = new Array(3);
-const reservationStore = new Array(3);
+let reservationAdd = new Array(3);
+let reservationMul = new Array(2);
+let reservationLoad = new Array(3);
+let reservationStore = new Array(3);
 
 //Arrays for the busy bits of each reservation station of each type
-const reservationAddAssignments = new Array(3);
-const reservationMulAssignments = new Array(2);
-const reservationLoadAssignments = new Array(3);
-const reservationStoreAssignments = new Array(3);
+let reservationAddAssignments = new Array(3);
+let reservationMulAssignments = new Array(2);
+let reservationLoadAssignments = new Array(3);
+let reservationStoreAssignments = new Array(3);
 
 //Number of busy reservation stations of each type
 let addAmount = 0;
@@ -74,16 +73,16 @@ let loadAmount = 0;
 let storeAmount = 0;
 
 // Number of the instructions currently in reservation stations
-let existingInsts = 0; //Should we disable the button when it returns back to zero ??
+let existingInsts = 0;
 
 //Register file with 32 floating point registers having 0 as initial value
-const registerFile = new Array(32).fill(0);
+let registerFile = new Array(32).fill(0);
 
 //Memory cache of 1024 words having 0 as initial value
-const cache = new Array(1024).fill(0);
+let cache = new Array(1024).fill(0);
 
 // Hash map that maps each reservation station with the register and the other reservation stations waiting for the result produced by it
-const writesTo = new Map();
+let writesTo = new Map();
 
 //Variable contains the reservation station that will publish to the CDB this cycle
 let writeBuffer = null;
@@ -104,12 +103,9 @@ let stalled = false;
 
 //for test
 registerFile.forEach((elem, idx) => (registerFile[idx] = idx));
+cache.forEach((elem, idx) => (cache[idx] = idx));
 
 //for test
-registerFile[2] = 3.5;
-registerFile[3] = 7.2;
-cache[2] = 2;
-cache[3] = 3;
 
 //fuction that returns the value of a key if the key exists in the map and an empty array other wise
 function getOrDefault(map, key) {
@@ -172,9 +168,32 @@ function getDependentInsts(dependencies) {
 
 /*The main fuction that simulates tomasulo algorithm cycle by cycle
 Takes as input the instruction that should be issued this cycle */
-function runCycle(instruction, pc, setPc) {
-  console.log(instruction);
+function runCycle(instruction, handleStop) {
+  let reservationAddAvailable = false;
+  for (let i = 0; i < reservationAddAssignments.length; i++) {
+    if (reservationAddAssignments[i] === 0) {
+      reservationAddAvailable = true;
+    }
+  }
 
+  let reservationStoreAvailable = false;
+  for (let i = 0; i < reservationStoreAssignments.length; i++) {
+    if (reservationStoreAssignments[i] === 0) reservationStoreAvailable = true;
+  }
+
+  let reservationMulAvailable = false;
+  for (let i = 0; i < reservationMulAssignments.length; i++) {
+    if (reservationMulAssignments[i] === 0) {
+      reservationMulAvailable = true;
+    }
+  }
+
+  let reservationLoadAvailable = false;
+  for (let i = 0; i < reservationLoadAssignments.length; i++) {
+    if (reservationLoadAssignments[i] === 0) {
+      reservationLoadAvailable = true;
+    }
+  }
   // Issue
 
   //nullify the tag of the Issued instruction at the beginning of each cycle
@@ -182,9 +201,6 @@ function runCycle(instruction, pc, setPc) {
   //try to issue the current instruction if the pipeline is not stalled and program hasn't ended yet
   if (!stalled && !programEnd) {
     let instructionArgs, instructionSplit, instructionType;
-
-    // increment the number of instruction currently in the pipeline
-    existingInsts++;
 
     // decode the different fields of the current instruction
 
@@ -203,6 +219,8 @@ function runCycle(instruction, pc, setPc) {
       case "SUB":
         //first check if there is an empty reservation station of that type
         if (reservationAdd.length !== addAmount) {
+          // increment the number of instruction currently in the pipeline
+          existingInsts++;
           //increment the number of busy reservation stations of type add
           addAmount++;
           //get the first empty reservation station
@@ -245,12 +263,16 @@ function runCycle(instruction, pc, setPc) {
               ...getOrDefault(writesTo, reservationAdd[index].Qk),
               "A" + (index + 1),
             ]);
-        } else stalled = true; //stall the pipe line if all the reservation stations are busy
+        } else {
+          stalled = true;
+        } //stall the pipe line if all the reservation stations are busy
         break;
       //Mul and Div instructions should be placed in the Mul reservation stations
       case "DIV":
       case "MUL":
         if (reservationMul.length !== mulAmount) {
+          // increment the number of instruction currently in the pipeline
+          existingInsts++;
           mulAmount++;
           const index = findFirstZero(reservationMulAssignments);
           reservationMulAssignments[index] = 1;
@@ -280,6 +302,8 @@ function runCycle(instruction, pc, setPc) {
         break;
       case "LD":
         if (reservationLoad.length !== loadAmount) {
+          // increment the number of instruction currently in the pipeline
+          existingInsts++;
           loadAmount++;
           const index = findFirstZero(reservationLoadAssignments);
 
@@ -297,6 +321,8 @@ function runCycle(instruction, pc, setPc) {
         break;
       case "SD":
         if (reservationStore.length !== storeAmount) {
+          // increment the number of instruction currently in the pipeline
+          existingInsts++;
           storeAmount++;
           const index = findFirstZero(reservationStoreAssignments);
           reservationStoreAssignments[index] = 1;
@@ -483,15 +509,17 @@ function runCycle(instruction, pc, setPc) {
         reservationStore[i].Vk,
         cache
       );
+
       reservationStore[i] = null;
       reservationStoreAssignments[i] = 0;
       existingInsts--;
+      if (existingInsts === 0) handleStop();
       storeAmount--;
-
-      if (instruction?.split(" ")[0] === "SD") {
-        stalled = false;
-        decrementPc = true;
-      }
+      if (!reservationStoreAvailable)
+        if (instruction?.split(" ")[0] === "SD") {
+          stalled = false;
+          decrementPc = true;
+        }
     }
   }
 
@@ -564,33 +592,39 @@ function runCycle(instruction, pc, setPc) {
         reservationAdd[+writeBuffer.Tag.slice(1) - 1] = null;
         //decrement the number of busy add reservation station
         addAmount--;
-        if (
-          instruction?.split(" ")[0] === "ADD" ||
-          instruction?.split(" ")[0] === "SUB"
-        ) {
-          stalled = false;
-          decrementPc = true;
+        if (!reservationAddAvailable) {
+          if (
+            instruction?.split(" ")[0] === "ADD" ||
+            instruction?.split(" ")[0] === "SUB"
+          ) {
+            stalled = false;
+            decrementPc = true;
+          }
         }
         break;
       case "M":
         reservationMulAssignments[+writeBuffer.Tag.slice(1) - 1] = 0;
         reservationMul[+writeBuffer.Tag.slice(1) - 1] = null;
         mulAmount--;
-        if (
-          instruction?.split(" ")[0] === "MUL" ||
-          instruction?.split(" ")[0] === "DIV"
-        ) {
-          stalled = false;
-          decrementPc = true;
+        if (!reservationMulAvailable) {
+          if (
+            instruction?.split(" ")[0] === "MUL" ||
+            instruction?.split(" ")[0] === "DIV"
+          ) {
+            stalled = false;
+            decrementPc = true;
+          }
         }
         break;
       case "L":
         reservationLoadAssignments[+writeBuffer.Tag.slice(1) - 1] = 0;
         reservationLoad[+writeBuffer.Tag.slice(1) - 1] = null;
         loadAmount--;
-        if (instruction?.split(" ")[0] === "LD") {
-          stalled = false;
-          decrementPc = true;
+        if (!reservationLoadAvailable) {
+          if (instruction?.split(" ")[0] === "LD") {
+            stalled = false;
+            decrementPc = true;
+          }
         }
         break;
     }
@@ -600,10 +634,13 @@ function runCycle(instruction, pc, setPc) {
     writeBuffer = null;
     // decrement the number of the instructions
     existingInsts--;
+    if (existingInsts === 0) handleStop();
   }
 
   return stalled;
 }
+
+let flag = false;
 
 function App() {
   const [pc, setPc] = useState(0);
@@ -624,490 +661,59 @@ function App() {
   const [resCacheOld, setResCacheOld] = useState([]);
   const [instQueueOld, setInstQueueOld] = useState([]);
 
-  const [running, setRunning] = useState(false);
+  const [aL, setAL] = useState(1);
+  const [mL, setML] = useState(1);
+  const [lL, setLL] = useState(1);
+  const [sL, setSL] = useState(1);
 
-  console.log(resAdd);
+  const [stop, setStop] = useState(false);
+
+  function handleStop() {
+    setStop(true);
+  }
+
+  const [running, setRunning] = useState(false);
+  console.log("running", stop);
   return (
     <div>
-      <TableContainer component={Paper} sx={{ maxHeight: 320 }}>
-        <Table
-          sx={{ minWidth: 700 }}
-          aria-label="customized table"
-          stickyHeader
-        >
-          <TableHead>
-            <TableRow>
-              <StyledTableCell>No.</StyledTableCell>
-              <StyledTableCell align="right">Instruction</StyledTableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {instQueue.map((row, idx) => (
-              <StyledTableRow key={idx}>
-                <StyledTableCell
-                  component="th"
-                  scope="row"
-                  sx={
-                    !deepEqual(row, instQueueOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {instQueue.length - idx}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, instQueueOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row}
-                </StyledTableCell>
-              </StyledTableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {!running && (
+        <>
+          <p style={{ marginTop: "0px" }}>Enter Add/Sub latencies : </p>
+          <input
+            type="number"
+            onChange={(e) => {
+              setAL(e.target.value);
+              addLatency = e.target.value;
+            }}
+          />
+          <p>Enter Mul latencies : </p>
+          <input
+            type="number"
+            onChange={(e) => {
+              setML(e.target.value);
+              mulLatency = e.target.value;
+            }}
+          ></input>
+          <p>Enter Load latencies : </p>
+          <input
+            type="number"
+            onChange={(e) => {
+              setLL(e.target.value);
+              loadLatency = e.target.value;
+            }}
+          ></input>
+          <p>Enter Store latencies : </p>
+          <input
+            type="number"
+            onChange={(e) => {
+              setSL(e.target.value);
+              storeLatency = e.target.value;
+            }}
+          ></input>
 
-      <TableContainer component={Paper} sx={{ maxHeight: 320 }}>
-        <Table
-          sx={{ minWidth: 700 }}
-          aria-label="customized table"
-          stickyHeader
-        >
-          <TableHead>
-            <TableRow>
-              <StyledTableCell>Tag</StyledTableCell>
-              <StyledTableCell align="right">Cycles Left</StyledTableCell>
-              <StyledTableCell align="right">Type</StyledTableCell>
-              <StyledTableCell align="right">Vj</StyledTableCell>
-
-              <StyledTableCell align="right">Vk</StyledTableCell>
-
-              <StyledTableCell align="right">Qj</StyledTableCell>
-
-              <StyledTableCell align="right">Qk</StyledTableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {resAdd.map((row, idx) => (
-              <StyledTableRow
-                key={idx}
-                style={
-                  !deepEqual(row, resAddOld[idx])
-                    ? {
-                        border: "5px solid red",
-                      }
-                    : undefined
-                }
-              >
-                <StyledTableCell
-                  component="th"
-                  scope="row"
-                  sx={
-                    !deepEqual(row, resAddOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Tag}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resAddOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.CyclesLeft}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resAddOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Type}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resAddOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Vj}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resAddOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Vk}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resAddOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Qj}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resAddOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Qk}
-                </StyledTableCell>
-              </StyledTableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      <TableContainer component={Paper} sx={{ maxHeight: 320 }}>
-        <Table
-          sx={{ minWidth: 700 }}
-          aria-label="customized table"
-          stickyHeader
-        >
-          <TableHead>
-            <TableRow>
-              <StyledTableCell>Tag</StyledTableCell>
-              <StyledTableCell align="right">Cycles Left</StyledTableCell>
-              <StyledTableCell align="right">Type</StyledTableCell>
-              <StyledTableCell align="right">Vj</StyledTableCell>
-
-              <StyledTableCell align="right">Vk</StyledTableCell>
-
-              <StyledTableCell align="right">Qj</StyledTableCell>
-
-              <StyledTableCell align="right">Qk</StyledTableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {resMul.map((row, idx) => (
-              <StyledTableRow
-                key={idx}
-                style={
-                  !deepEqual(row, resMulOld[idx])
-                    ? {
-                        border: "5px solid red",
-                      }
-                    : undefined
-                }
-              >
-                <StyledTableCell
-                  component="th"
-                  scope="row"
-                  sx={
-                    !deepEqual(row, resMulOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Tag}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resMulOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.CyclesLeft}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resMulOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Type}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resMulOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Vj}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resMulOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Vk}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resMulOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Qj}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resMulOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Qk}
-                </StyledTableCell>
-              </StyledTableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      <TableContainer component={Paper} sx={{ maxHeight: 320 }}>
-        <Table
-          sx={{ minWidth: 700 }}
-          aria-label="customized table"
-          stickyHeader
-        >
-          <TableHead>
-            <TableRow>
-              <StyledTableCell>Tag</StyledTableCell>
-              <StyledTableCell align="right">Cycles Left</StyledTableCell>
-              <StyledTableCell align="right">Type</StyledTableCell>
-              <StyledTableCell align="right">V</StyledTableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {resLoad.map((row, idx) => (
-              <StyledTableRow
-                key={idx}
-                style={
-                  !deepEqual(row, resLoadOld[idx])
-                    ? {
-                        border: "5px solid red",
-                      }
-                    : undefined
-                }
-              >
-                <StyledTableCell
-                  component="th"
-                  scope="row"
-                  sx={
-                    !deepEqual(row, resLoadOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Tag}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resLoadOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.CyclesLeft}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resLoadOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Type}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resLoadOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.V}
-                </StyledTableCell>
-              </StyledTableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      <TableContainer component={Paper} sx={{ maxHeight: 320 }}>
-        <Table
-          sx={{ minWidth: 700 }}
-          aria-label="customized table"
-          stickyHeader
-        >
-          <TableHead>
-            <TableRow>
-              <StyledTableCell>Tag</StyledTableCell>
-              <StyledTableCell align="right">Cycles Left</StyledTableCell>
-              <StyledTableCell align="right">Type</StyledTableCell>
-              <StyledTableCell align="right">Vj</StyledTableCell>
-              <StyledTableCell align="right">Vk</StyledTableCell>
-              <StyledTableCell align="right">Qj</StyledTableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {resStore.map((row, idx) => (
-              <StyledTableRow
-                key={idx}
-                style={
-                  !deepEqual(row, resStoreOld[idx])
-                    ? {
-                        border: "5px solid red",
-                      }
-                    : undefined
-                }
-              >
-                <StyledTableCell
-                  component="th"
-                  scope="row"
-                  sx={
-                    !deepEqual(row, resStoreOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Tag}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resStoreOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.CyclesLeft}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resStoreOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Type}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resStoreOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Vj}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resStoreOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Vk}
-                </StyledTableCell>
-                <StyledTableCell
-                  align="right"
-                  sx={
-                    !deepEqual(row, resStoreOld[idx])
-                      ? {
-                          color: "red",
-                        }
-                      : undefined
-                  }
-                >
-                  {row?.Qj}
-                </StyledTableCell>
-              </StyledTableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+          <p>Enter your instructions in assembly</p>
+        </>
+      )}
 
       <div>
         <TextareaAutosize
@@ -1116,97 +722,706 @@ function App() {
         ></TextareaAutosize>
       </div>
       {running ? (
-        <button
-          onClick={() => {
-            // get the next instruction in the instructions queue
-            let currentInstruction = instructions.split(/\r?\n|\r|\n/g)[pc];
-            // if  no more instructions then mark the end of the program
-            if (!currentInstruction) programEnd = true;
-            // Run for another cycle
-            runCycle(currentInstruction);
+        <>
+          <p>{"Clock Cycle : " + clock}</p>
+          {stop ? (
+            <h1>Finished Execution. Click reset to run again.</h1>
+          ) : (
+            <button
+              onClick={() => {
+                // get the next instruction in the instructions queue
+                let currentInstruction = instructions.split(/\r?\n|\r|\n/g)[pc];
+                // if  no more instructions then mark the end of the program
+                if (!currentInstruction) programEnd = true;
+                // Run for another cycle
+                runCycle(currentInstruction, handleStop);
 
-            // increment the pc if the pipline is not stalled and the program has not ended yet
+                // increment the pc if the pipline is not stalled and the program has not ended yet
+                if (!stalled && !programEnd && !decrementPc) {
+                  setPc(pc + 1);
+                } else {
+                  flag = true;
+                }
+                console.log(flag);
+                if (decrementPc) {
+                  decrementPc = false;
+                }
 
-            if (!stalled && !programEnd && !decrementPc) {
-              setPc(pc + 1);
-            }
-            if (decrementPc) {
-              decrementPc = false;
-            }
+                // set the old states
+                setRegFileOld([...regFile]);
+                setResAddOld([...resAdd]);
+                setResMulOld([...resMul]);
+                setResStoreOld([...resStore]);
+                setResLoadOld([...resLoad]);
+                setResCacheOld([...resCache]);
 
-            // set the old states
-            setRegFileOld([...regFile]);
-            setResAddOld([...resAdd]);
-            setResMulOld([...resMul]);
-            setResStoreOld([...resStore]);
-
-            setResLoadOld([...resLoad]);
-            setResCacheOld([...resCache]);
-
-            // set the new states
-            setRegFile([...registerFile]);
-            setResAdd([...reservationAdd]);
-            setResMul([...reservationMul]);
-            setResStore([...reservationStore]);
-
-            setResLoad([...reservationLoad]);
-            setResCache([...cache]);
-            if (!stalled) {
-              setInstQueueOld([...instQueue]);
-              setInstQueue([...instQueue].splice(0, instQueue.length - 1));
-            }
-
-            // increment the current clock cycle
-            clock++;
-          }}
-        >
-          Next Cycle
-        </button>
+                // set the new states
+                setRegFile([...registerFile]);
+                setResAdd([...reservationAdd]);
+                setResMul([...reservationMul]);
+                setResStore([...reservationStore]);
+                setResLoad([...reservationLoad]);
+                setResCache([...cache]);
+                if (!flag) {
+                  setInstQueueOld([...instQueue]);
+                  setInstQueue([...instQueue].splice(0, instQueue.length - 1));
+                }
+                flag = false;
+                // increment the current clock cycle
+                clock++;
+              }}
+            >
+              Next Cycle
+            </button>
+          )}
+        </>
       ) : (
         <button
           onClick={() => {
             setRunning(true);
             setInstQueue(instructions.split(/\r?\n|\r|\n/g).reverse());
           }}
+          disabled={
+            !aL || !mL || !lL || !sL || !instructions || instructions === ""
+          }
         >
           Start
         </button>
       )}
       <button
         onClick={() => {
-          //reset the state
-          setRegFile([]);
-          setResAdd([]);
-          setResMul([]);
-          setResStore([]);
-          setResLoad([]);
-          setResCache([]);
-          setInstQueue([]);
-          setRegFileOld([]);
-          setResAddOld([]);
-          setResMulOld([]);
-          setResStoreOld([]);
-          setResLoadOld([]);
-          setResCacheOld([]);
-          setInstQueueOld([]);
-          setPc(0);
-          setRunning(false);
-          clock = 0;
-          programEnd = false;
-          stalled = false;
-          decrementPc = false;
-          reservationAdd = [];
-          reservationMul = [];
-          reservationStore = [];
-          reservationLoad = [];
-          instQueue = [];
-          instructions = "";
-          cache = new Array(1024).fill(0);
-          registerFile = new Array(32).fill(0);
+          document.location.reload(true);
         }}
       >
         Reset
       </button>
+      {running && (
+        <>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <div
+              style={{ display: "flex", flexDirection: "row", gap: "400px" }}
+            >
+              <div>
+                <p>Instruction Queue :</p>
+                <TableContainer
+                  className="scroll-hidden"
+                  component={Paper}
+                  sx={{ maxHeight: 325, width: "fit-content" }}
+                >
+                  <Table aria-label="customized table" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <StyledTableCell>No.</StyledTableCell>
+                        <StyledTableCell>Instruction</StyledTableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {instQueue.map((row, idx) => (
+                        <StyledTableRow key={idx}>
+                          <StyledTableCell
+                            component="th"
+                            scope="row"
+                            sx={
+                              !deepEqual(row, instQueueOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {instQueue.length - idx}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            sx={
+                              !deepEqual(row, instQueueOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row}
+                          </StyledTableCell>
+                        </StyledTableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </div>
+              <div>
+                <p>Register File</p>
+                <TableContainer
+                  className="scroll-hidden"
+                  component={Paper}
+                  sx={{ maxHeight: 325, width: "fit-content" }}
+                >
+                  {" "}
+                  <Table aria-label="customized table" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <StyledTableCell>No.</StyledTableCell>
+                        <StyledTableCell align="right">Value</StyledTableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {regFile.map((row, idx) => (
+                        <StyledTableRow
+                          key={idx}
+                          style={
+                            !deepEqual(row, regFileOld[idx])
+                              ? {
+                                  color: "5px solid red",
+                                }
+                              : undefined
+                          }
+                        >
+                          <StyledTableCell
+                            component="th"
+                            scope="row"
+                            sx={
+                              !deepEqual(row, regFileOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {"F" + idx}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, regFileOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row}
+                          </StyledTableCell>
+                        </StyledTableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </div>
+              <div>
+                <p>Memory : </p>
+                <TableContainer
+                  className="scroll-hidden"
+                  component={Paper}
+                  sx={{ maxHeight: 325, width: "fit-content" }}
+                >
+                  <Table aria-label="customized table" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <StyledTableCell>No.</StyledTableCell>
+                        <StyledTableCell align="right">Value</StyledTableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {resCache.map((row, idx) => (
+                        <StyledTableRow
+                          key={idx}
+                          style={
+                            !deepEqual(row, resCacheOld[idx])
+                              ? {
+                                  color: "5px solid red",
+                                }
+                              : undefined
+                          }
+                        >
+                          <StyledTableCell
+                            component="th"
+                            scope="row"
+                            sx={
+                              !deepEqual(row, resCacheOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {idx}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resCacheOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row}
+                          </StyledTableCell>
+                        </StyledTableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </div>
+            </div>
+            <div
+              style={{ display: "flex", flexDirection: "row", gap: "100px" }}
+            >
+              {" "}
+              <div>
+                <p>Store Buffer :</p>
+                <TableContainer
+                  className="scroll-hidden"
+                  component={Paper}
+                  sx={{ maxHeight: 325, width: "fit-content" }}
+                >
+                  <Table aria-label="customized table" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <StyledTableCell>Tag</StyledTableCell>
+                        <StyledTableCell align="right">
+                          Cycles Left
+                        </StyledTableCell>
+                        <StyledTableCell align="right">Type</StyledTableCell>
+                        <StyledTableCell align="right">Vj</StyledTableCell>
+                        <StyledTableCell align="right">Vk</StyledTableCell>
+                        <StyledTableCell align="right">Qj</StyledTableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {resStore.map((row, idx) => (
+                        <StyledTableRow
+                          key={idx}
+                          style={
+                            !deepEqual(row, resStoreOld[idx])
+                              ? {
+                                  color: "5px solid red",
+                                }
+                              : undefined
+                          }
+                        >
+                          <StyledTableCell
+                            component="th"
+                            scope="row"
+                            sx={
+                              !deepEqual(row, resStoreOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Tag}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resStoreOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.CyclesLeft}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resStoreOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Type}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resStoreOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Vj}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resStoreOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Vk}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resStoreOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Qj}
+                          </StyledTableCell>
+                        </StyledTableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </div>
+              <div>
+                <p>Load Buffer :</p>
+                <TableContainer
+                  className="scroll-hidden"
+                  component={Paper}
+                  sx={{ maxHeight: 325, width: "fit-content" }}
+                >
+                  <Table aria-label="customized table" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <StyledTableCell>Tag</StyledTableCell>
+                        <StyledTableCell align="right">
+                          Cycles Left
+                        </StyledTableCell>
+                        <StyledTableCell align="right">Type</StyledTableCell>
+                        <StyledTableCell align="right">V</StyledTableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {resLoad.map((row, idx) => (
+                        <StyledTableRow
+                          key={idx}
+                          style={
+                            !deepEqual(row, resLoadOld[idx])
+                              ? {
+                                  color: "5px solid red",
+                                }
+                              : undefined
+                          }
+                        >
+                          <StyledTableCell
+                            component="th"
+                            scope="row"
+                            sx={
+                              !deepEqual(row, resLoadOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Tag}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resLoadOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.CyclesLeft}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resLoadOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Type}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resLoadOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.V}
+                          </StyledTableCell>
+                        </StyledTableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </div>
+              <div>
+                <p>Add Reservation Station : </p>
+                <TableContainer
+                  className="scroll-hidden"
+                  component={Paper}
+                  sx={{ maxHeight: 325, width: "fit-content" }}
+                >
+                  <Table aria-label="customized table" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <StyledTableCell>Tag</StyledTableCell>
+                        <StyledTableCell align="right">
+                          Cycles Left
+                        </StyledTableCell>
+                        <StyledTableCell align="right">Type</StyledTableCell>
+                        <StyledTableCell align="right">Vj</StyledTableCell>
+
+                        <StyledTableCell align="right">Vk</StyledTableCell>
+
+                        <StyledTableCell align="right">Qj</StyledTableCell>
+
+                        <StyledTableCell align="right">Qk</StyledTableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {resAdd.map((row, idx) => (
+                        <StyledTableRow
+                          key={idx}
+                          style={
+                            !deepEqual(row, resAddOld[idx])
+                              ? {
+                                  color: "5px solid red",
+                                }
+                              : undefined
+                          }
+                        >
+                          <StyledTableCell
+                            component="th"
+                            scope="row"
+                            sx={
+                              !deepEqual(row, resAddOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Tag}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resAddOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.CyclesLeft}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resAddOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Type}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resAddOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Vj}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resAddOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Vk}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resAddOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Qj}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resAddOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Qk}
+                          </StyledTableCell>
+                        </StyledTableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </div>
+              <div>
+                <p>Mul Reservation Station</p>
+                <TableContainer
+                  className="scroll-hidden"
+                  component={Paper}
+                  sx={{ maxHeight: 325, width: "fit-content" }}
+                >
+                  <Table aria-label="customized table" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <StyledTableCell>Tag</StyledTableCell>
+                        <StyledTableCell align="right">
+                          Cycles Left
+                        </StyledTableCell>
+                        <StyledTableCell align="right">Type</StyledTableCell>
+                        <StyledTableCell align="right">Vj</StyledTableCell>
+
+                        <StyledTableCell align="right">Vk</StyledTableCell>
+
+                        <StyledTableCell align="right">Qj</StyledTableCell>
+
+                        <StyledTableCell align="right">Qk</StyledTableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {resMul.map((row, idx) => (
+                        <StyledTableRow
+                          key={idx}
+                          style={
+                            !deepEqual(row, resMulOld[idx])
+                              ? {
+                                  color: "5px solid red",
+                                }
+                              : undefined
+                          }
+                        >
+                          <StyledTableCell
+                            component="th"
+                            scope="row"
+                            sx={
+                              !deepEqual(row, resMulOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Tag}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resMulOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.CyclesLeft}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resMulOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Type}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resMulOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Vj}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resMulOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Vk}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resMulOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Qj}
+                          </StyledTableCell>
+                          <StyledTableCell
+                            align="right"
+                            sx={
+                              !deepEqual(row, resMulOld[idx])
+                                ? {
+                                    color: "red",
+                                  }
+                                : undefined
+                            }
+                          >
+                            {row?.Qk}
+                          </StyledTableCell>
+                        </StyledTableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
