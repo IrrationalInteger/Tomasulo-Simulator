@@ -2,6 +2,46 @@ import "./App.css";
 import TextareaAutosize from "react-textarea-autosize";
 import execution from "./logic/execution";
 import { useState } from "react";
+import * as React from "react";
+import { styled } from "@mui/material/styles";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell, { tableCellClasses } from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import Paper from "@mui/material/Paper";
+
+function deepEqual(x, y) {
+  return x && y && typeof x === "object" && typeof y === "object"
+    ? Object.keys(x).length === Object.keys(y).length &&
+        Object.keys(x).reduce(function (isEqual, key) {
+          return isEqual && deepEqual(x[key], y[key]);
+        }, true)
+    : x === y;
+}
+
+const StyledTableCell = styled(TableCell)(({ theme }) => ({
+  [`&.${tableCellClasses.head}`]: {
+    backgroundColor: theme.palette.common.black,
+    color: theme.palette.common.white,
+  },
+  [`&.${tableCellClasses.body}`]: {
+    fontSize: 14,
+  },
+}));
+
+const StyledTableRow = styled(TableRow)(({ theme }) => ({
+  "&:nth-of-type(odd)": {
+    backgroundColor: theme.palette.action.hover,
+  },
+  // hide last border
+  "&:last-child td, &:last-child th": {
+    border: 0,
+  },
+}));
+
+//---------------------------
 
 let decrementPc = false;
 
@@ -16,7 +56,7 @@ const loadLatency = 2;
 const storeLatency = 2;
 
 //Different Reservation Station and Buffers (Should be edited to take the size as input from the user??)
-const reservationAdd = new Array(3);
+const reservationAdd = new Array(5);
 const reservationMul = new Array(2);
 const reservationLoad = new Array(3);
 const reservationStore = new Array(3);
@@ -568,60 +608,604 @@ function runCycle(instruction, pc, setPc) {
 function App() {
   const [pc, setPc] = useState(0);
   const [instructions, setInstructions] = useState();
-  const [result, setResult] = useState("");
+  const [regFile, setRegFile] = useState([]);
+  const [resAdd, setResAdd] = useState([]);
+  const [resMul, setResMul] = useState([]);
+  const [resStore, setResStore] = useState([]);
+  const [resLoad, setResLoad] = useState([]);
+  const [resCache, setResCache] = useState([]);
+  const [instQueue, setInstQueue] = useState([]);
 
+  const [regFileOld, setRegFileOld] = useState([]);
+  const [resAddOld, setResAddOld] = useState([]);
+  const [resMulOld, setResMulOld] = useState([]);
+  const [resStoreOld, setResStoreOld] = useState([]);
+  const [resLoadOld, setResLoadOld] = useState([]);
+  const [resCacheOld, setResCacheOld] = useState([]);
+  const [instQueueOld, setInstQueueOld] = useState([]);
+
+  const [running, setRunning] = useState(false);
+
+  console.log(resAdd);
   return (
     <div>
+      <TableContainer component={Paper} sx={{ maxHeight: 320 }}>
+        <Table
+          sx={{ minWidth: 700 }}
+          aria-label="customized table"
+          stickyHeader
+        >
+          <TableHead>
+            <TableRow>
+              <StyledTableCell>No.</StyledTableCell>
+              <StyledTableCell align="right">Instruction</StyledTableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {instQueue.map((row, idx) => (
+              <StyledTableRow key={idx}>
+                <StyledTableCell
+                  component="th"
+                  scope="row"
+                  sx={
+                    !deepEqual(row, instQueueOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {instQueue.length - idx}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, instQueueOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row}
+                </StyledTableCell>
+              </StyledTableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <TableContainer component={Paper} sx={{ maxHeight: 320 }}>
+        <Table
+          sx={{ minWidth: 700 }}
+          aria-label="customized table"
+          stickyHeader
+        >
+          <TableHead>
+            <TableRow>
+              <StyledTableCell>Tag</StyledTableCell>
+              <StyledTableCell align="right">Cycles Left</StyledTableCell>
+              <StyledTableCell align="right">Type</StyledTableCell>
+              <StyledTableCell align="right">Vj</StyledTableCell>
+
+              <StyledTableCell align="right">Vk</StyledTableCell>
+
+              <StyledTableCell align="right">Qj</StyledTableCell>
+
+              <StyledTableCell align="right">Qk</StyledTableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {resAdd.map((row, idx) => (
+              <StyledTableRow
+                key={idx}
+                style={
+                  !deepEqual(row, resAddOld[idx])
+                    ? {
+                        border: "5px solid red",
+                      }
+                    : undefined
+                }
+              >
+                <StyledTableCell
+                  component="th"
+                  scope="row"
+                  sx={
+                    !deepEqual(row, resAddOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Tag}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resAddOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.CyclesLeft}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resAddOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Type}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resAddOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Vj}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resAddOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Vk}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resAddOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Qj}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resAddOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Qk}
+                </StyledTableCell>
+              </StyledTableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <TableContainer component={Paper} sx={{ maxHeight: 320 }}>
+        <Table
+          sx={{ minWidth: 700 }}
+          aria-label="customized table"
+          stickyHeader
+        >
+          <TableHead>
+            <TableRow>
+              <StyledTableCell>Tag</StyledTableCell>
+              <StyledTableCell align="right">Cycles Left</StyledTableCell>
+              <StyledTableCell align="right">Type</StyledTableCell>
+              <StyledTableCell align="right">Vj</StyledTableCell>
+
+              <StyledTableCell align="right">Vk</StyledTableCell>
+
+              <StyledTableCell align="right">Qj</StyledTableCell>
+
+              <StyledTableCell align="right">Qk</StyledTableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {resMul.map((row, idx) => (
+              <StyledTableRow
+                key={idx}
+                style={
+                  !deepEqual(row, resMulOld[idx])
+                    ? {
+                        border: "5px solid red",
+                      }
+                    : undefined
+                }
+              >
+                <StyledTableCell
+                  component="th"
+                  scope="row"
+                  sx={
+                    !deepEqual(row, resMulOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Tag}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resMulOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.CyclesLeft}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resMulOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Type}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resMulOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Vj}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resMulOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Vk}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resMulOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Qj}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resMulOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Qk}
+                </StyledTableCell>
+              </StyledTableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <TableContainer component={Paper} sx={{ maxHeight: 320 }}>
+        <Table
+          sx={{ minWidth: 700 }}
+          aria-label="customized table"
+          stickyHeader
+        >
+          <TableHead>
+            <TableRow>
+              <StyledTableCell>Tag</StyledTableCell>
+              <StyledTableCell align="right">Cycles Left</StyledTableCell>
+              <StyledTableCell align="right">Type</StyledTableCell>
+              <StyledTableCell align="right">V</StyledTableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {resLoad.map((row, idx) => (
+              <StyledTableRow
+                key={idx}
+                style={
+                  !deepEqual(row, resLoadOld[idx])
+                    ? {
+                        border: "5px solid red",
+                      }
+                    : undefined
+                }
+              >
+                <StyledTableCell
+                  component="th"
+                  scope="row"
+                  sx={
+                    !deepEqual(row, resLoadOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Tag}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resLoadOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.CyclesLeft}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resLoadOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Type}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resLoadOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.V}
+                </StyledTableCell>
+              </StyledTableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <TableContainer component={Paper} sx={{ maxHeight: 320 }}>
+        <Table
+          sx={{ minWidth: 700 }}
+          aria-label="customized table"
+          stickyHeader
+        >
+          <TableHead>
+            <TableRow>
+              <StyledTableCell>Tag</StyledTableCell>
+              <StyledTableCell align="right">Cycles Left</StyledTableCell>
+              <StyledTableCell align="right">Type</StyledTableCell>
+              <StyledTableCell align="right">Vj</StyledTableCell>
+              <StyledTableCell align="right">Vk</StyledTableCell>
+              <StyledTableCell align="right">Qj</StyledTableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {resStore.map((row, idx) => (
+              <StyledTableRow
+                key={idx}
+                style={
+                  !deepEqual(row, resStoreOld[idx])
+                    ? {
+                        border: "5px solid red",
+                      }
+                    : undefined
+                }
+              >
+                <StyledTableCell
+                  component="th"
+                  scope="row"
+                  sx={
+                    !deepEqual(row, resStoreOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Tag}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resStoreOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.CyclesLeft}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resStoreOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Type}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resStoreOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Vj}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resStoreOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Vk}
+                </StyledTableCell>
+                <StyledTableCell
+                  align="right"
+                  sx={
+                    !deepEqual(row, resStoreOld[idx])
+                      ? {
+                          color: "red",
+                        }
+                      : undefined
+                  }
+                >
+                  {row?.Qj}
+                </StyledTableCell>
+              </StyledTableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
       <div>
         <TextareaAutosize
+          disabled={running}
           onChange={(e) => setInstructions(e.target.value)}
         ></TextareaAutosize>
-        <TextareaAutosize
-          contentEditable={false}
-          value={result}
-        ></TextareaAutosize>
       </div>
+      {running ? (
+        <button
+          onClick={() => {
+            // get the next instruction in the instructions queue
+            let currentInstruction = instructions.split(/\r?\n|\r|\n/g)[pc];
+            // if  no more instructions then mark the end of the program
+            if (!currentInstruction) programEnd = true;
+            // Run for another cycle
+            runCycle(currentInstruction);
+
+            // increment the pc if the pipline is not stalled and the program has not ended yet
+
+            if (!stalled && !programEnd && !decrementPc) {
+              setPc(pc + 1);
+            }
+            if (decrementPc) {
+              decrementPc = false;
+            }
+
+            // set the old states
+            setRegFileOld([...regFile]);
+            setResAddOld([...resAdd]);
+            setResMulOld([...resMul]);
+            setResStoreOld([...resStore]);
+
+            setResLoadOld([...resLoad]);
+            setResCacheOld([...resCache]);
+
+            // set the new states
+            setRegFile([...registerFile]);
+            setResAdd([...reservationAdd]);
+            setResMul([...reservationMul]);
+            setResStore([...reservationStore]);
+
+            setResLoad([...reservationLoad]);
+            setResCache([...cache]);
+            if (!stalled) {
+              setInstQueueOld([...instQueue]);
+              setInstQueue([...instQueue].splice(0, instQueue.length - 1));
+            }
+
+            // increment the current clock cycle
+            clock++;
+          }}
+        >
+          Next Cycle
+        </button>
+      ) : (
+        <button
+          onClick={() => {
+            setRunning(true);
+            setInstQueue(instructions.split(/\r?\n|\r|\n/g).reverse());
+          }}
+        >
+          Start
+        </button>
+      )}
       <button
         onClick={() => {
-          // get the next instruction in the instructions queue
-          let currentInstruction = instructions.split(/\r?\n|\r|\n/g)[pc];
-          // if  no more instructions then mark the end of the program
-          if (!currentInstruction) programEnd = true;
-          // Run for another cycle
-          runCycle(currentInstruction);
-
-          // increment the pc if the pipline is not stalled and the program has not ended yet
-
-          if (!stalled && !programEnd && !decrementPc) {
-            setPc(pc + 1);
-          }
-          if (decrementPc) {
-            decrementPc = false;
-          }
-          setResult(
-            "clock: " +
-              (clock + "\n") +
-              "reservationAdd: " +
-              JSON.stringify(reservationAdd) +
-              "\n" +
-              "reservationMul: " +
-              JSON.stringify(reservationMul) +
-              "\n" +
-              "reservationLoad: " +
-              JSON.stringify(reservationLoad) + // Should we add Qi to the register file?
-              "\n" +
-              "reservationStore: " +
-              JSON.stringify(reservationStore) +
-              "\n" +
-              "registerFile: " +
-              JSON.stringify(registerFile) +
-              "\n"
-          );
-          // increment the current clock cycle
-          clock++;
+          //reset the state
+          setRegFile([]);
+          setResAdd([]);
+          setResMul([]);
+          setResStore([]);
+          setResLoad([]);
+          setResCache([]);
+          setInstQueue([]);
+          setRegFileOld([]);
+          setResAddOld([]);
+          setResMulOld([]);
+          setResStoreOld([]);
+          setResLoadOld([]);
+          setResCacheOld([]);
+          setInstQueueOld([]);
+          setPc(0);
+          setRunning(false);
+          clock = 0;
+          programEnd = false;
+          stalled = false;
+          decrementPc = false;
+          reservationAdd = [];
+          reservationMul = [];
+          reservationStore = [];
+          reservationLoad = [];
+          instQueue = [];
+          instructions = "";
+          cache = new Array(1024).fill(0);
+          registerFile = new Array(32).fill(0);
         }}
       >
-        Next Cycle
+        Reset
       </button>
     </div>
   );
